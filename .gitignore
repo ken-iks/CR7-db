@@ -40,3 +40,7 @@ build/
 ### Environment variables ###
 .env
 .idea
+responseBody.txt
+
+### Example databases ###
+57406b91-5450-4419-8191-6f094d50070f.db
