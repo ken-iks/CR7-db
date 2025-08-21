@@ -9,44 +9,47 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 public class ChatNode {
     private static final Logger logger = LoggerFactory.getLogger(ChatNode.class);
-    String response;
-    int numTokens;
-    LocalDateTime timestamp;
+    private String response;
+    private int numTokens;
+    private LocalDateTime timestamp;
 
-    //TODO: implement parsing for tokens and timestamp (in diff sections of JSON body)
-    public ChatNode(JSONObject responseObject) {
-        // output is a json array
+    public ChatNode(String response) {
+        JSONObject responseObject = new JSONObject(response);
+        // get timestamp
+        long unixTimestamp = responseObject.getLong("created_at");
+        setTimestamp(convertFromLong(unixTimestamp));
+
+        // get tokens
+        setNumTokens(responseObject.getJSONObject("usage").getInt("total_tokens"));
+
+        // get output
         JSONArray data = responseObject.getJSONArray("output");
-        Optional<Object> dataObject = data.toList().stream().filter(
-                x -> {
-                    JSONObject obj = (JSONObject) x;
-                    return obj.has("content") && obj.getJSONArray("content").toList().size()==1;
-                }
-        ).findFirst();
+        Optional<JSONObject> dataObject = IntStream.range(0, data.length())
+                .mapToObj(data::getJSONObject)
+                .peek(obj -> logger.info(obj.toString()))
+                .filter(obj -> obj.has("content") && obj.getJSONArray("content").length() == 1)
+                .findFirst();
 
         // now we know we can case the optional to an object and that we ca go straight to the contents
-        JSONObject content = dataObject.map(x -> {
-            JSONObject obj = (JSONObject) x;
+        JSONObject content = dataObject.map(obj -> {
             return obj.getJSONArray("content").getJSONObject(0);
         }).orElseThrow(() -> new RuntimeException("Bug in data!!"));
 
         // now we can easily use our content!
         setResponse(content.getString("text"));
-        throw new RuntimeException("Not implemented yet");
-
     }
     // Takes a string UNIX timestamp and converts to
-    private LocalDateTime convertFromString(String s) {
+    private LocalDateTime convertFromLong(Long ts) {
         try {
-            long ts = Long.parseLong(s);
             Instant instant = Instant.ofEpochSecond(ts);
             return LocalDateTime.ofInstant(instant, ZoneId.of("America/Los_Angeles"));
         }
         catch (Exception e) {
-            throw new IllegalArgumentException("Could not convert string to date: " + s);
+            throw new IllegalArgumentException("Could not convert string to date: " + ts);
         }
     }
 
@@ -57,11 +60,13 @@ public class ChatNode {
     public LocalDateTime getTimestamp() { return this.timestamp; };
     private void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; };
 
-    //TODO: finish impl
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        throw new RuntimeException("Not implemented");
+        return "Response was: '%s', and was sent at %s.\nThis response took %d tokens".formatted(
+                getResponse(),
+                getTimestamp().toString(),
+                getNumTokens()
+        );
     }
 }
 
